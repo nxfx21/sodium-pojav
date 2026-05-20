@@ -67,7 +67,7 @@ public class DefaultShaderInterface implements ChunkShaderInterface {
     @Override // the shader interface should not modify pipeline state
     public void setupState(TerrainRenderPass pass, FogParameters parameters, GpuSampler terrainSampler) {
         this.bindTexture(ChunkShaderTextureSlot.BLOCK, pass.getAtlas(), terrainSampler);
-        this.bindTexture(ChunkShaderTextureSlot.LIGHT, Minecraft.getInstance().gameRenderer.lightTexture().getTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+        this.bindTexture(ChunkShaderTextureSlot.LIGHT, Minecraft.getInstance().gameRenderer.lightmap(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 
         var textureAtlas = (TextureAtlasAccessor) Minecraft.getInstance()
                 .getTextureManager()
@@ -80,13 +80,13 @@ public class DefaultShaderInterface implements ChunkShaderInterface {
         double subTexelOffset = 1.0f / CompactChunkVertex.TEXTURE_MAX_VALUE;
 
         this.uniformTexCoordShrink.set(
-                (float) (subTexelOffset - (((1.0D / textureAtlas.getWidth()) / subTexelPrecision))),
-                (float) (subTexelOffset - (((1.0D / textureAtlas.getHeight()) / subTexelPrecision)))
+                (float) (subTexelOffset - (((1.0D / textureAtlas.sodium$getWidth()) / subTexelPrecision))),
+                (float) (subTexelOffset - (((1.0D / textureAtlas.sodium$getHeight()) / subTexelPrecision)))
         );
 
         this.uniformTexelSize.set(
-                1.0f / textureAtlas.getWidth(),
-                1.0f / textureAtlas.getHeight()
+                1.0f / textureAtlas.sodium$getWidth(),
+                1.0f / textureAtlas.sodium$getHeight()
         );
 
         uniformFadePeriod.setFloat((float) (1.0 / (Minecraft.getInstance().options.chunkSectionFadeInTime().get() * 1000.0))); // this is in seconds!

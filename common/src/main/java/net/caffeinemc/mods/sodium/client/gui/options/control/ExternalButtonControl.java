@@ -8,7 +8,7 @@ import net.caffeinemc.mods.sodium.client.gui.Colors;
 import net.caffeinemc.mods.sodium.client.gui.Layout;
 import net.caffeinemc.mods.sodium.client.util.Dim2i;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -19,6 +19,7 @@ import java.util.function.Consumer;
 
 public class ExternalButtonControl implements Control {
     public static final Component BASE_BUTTON_TEXT = Component.translatable("sodium.options.open_external_page_button");
+    public static final String EXTERNAL_PAGE_PREFIX = "▶ ";
 
     private final ExternalButtonOption option;
     private final Consumer<Screen> currentScreenConsumer;
@@ -73,8 +74,8 @@ public class ExternalButtonControl implements Control {
         }
 
         @Override
-        public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-            super.render(graphics, mouseX, mouseY, delta);
+        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+            super.extractRenderState(graphics, mouseX, mouseY, delta);
 
             Component buttonText = formatExternalButtonText(this.option.isEnabled(), this.theme);
 

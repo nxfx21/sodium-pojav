@@ -2,16 +2,19 @@ package net.caffeinemc.mods.sodium.mixin.features.render.immediate.buffer_builde
 
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.QuadInstance;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.caffeinemc.mods.sodium.api.memory.MemoryIntrinsics;
 import net.caffeinemc.mods.sodium.api.texture.SpriteUtil;
-import net.caffeinemc.mods.sodium.api.util.ColorABGR;
 import net.caffeinemc.mods.sodium.api.vertex.buffer.VertexBufferWriter;
-import net.caffeinemc.mods.sodium.client.model.quad.ModelQuadView;
+import net.caffeinemc.mods.sodium.client.model.quad.BakedQuadView;
 import net.caffeinemc.mods.sodium.client.render.immediate.model.BakedModelEncoder;
-import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 @SuppressWarnings({ "SameParameterValue" })
 @Mixin(BufferBuilder.class)
@@ -20,37 +23,37 @@ public abstract class BufferBuilderMixin implements VertexConsumer {
     @Final
     private boolean fastFormat;
 
-    @Override
-    public void putBulkData(PoseStack.Pose matrices, BakedQuad bakedQuad, float r, float g, float b, float a, int light, int overlay) {
-        if (!this.fastFormat) {
-            VertexConsumer.super.putBulkData(matrices, bakedQuad, r, g, b, a, light, overlay);
+    @Shadow
+    @Final
+    private boolean fullFormat;
 
-            if (bakedQuad.sprite() != null) {
-                SpriteUtil.INSTANCE.markSpriteActive(bakedQuad.sprite());
-            }
+    @Redirect(method = "*", at = @At(value = "INVOKE", target = "Lorg/lwjgl/system/MemoryUtil;memPutInt(JI)V"))
+    private static void redirectInt(long address, int value) {
+        MemoryIntrinsics.putInt(address, value);
+    }
 
-            return;
-        }
+    @Redirect(method = "*", at = @At(value = "INVOKE", target = "Lorg/lwjgl/system/MemoryUtil;memPutFloat(JF)V"))
+    private static void redirectFloat(long address, float value) {
+        MemoryIntrinsics.putFloat(address, value);
+    }
 
-        VertexBufferWriter writer = VertexBufferWriter.of(this);
+    @Redirect(method = "*", at = @At(value = "INVOKE", target = "Lorg/lwjgl/system/MemoryUtil;memPutShort(JS)V"))
+    private static void redirectShort(long address, short value) {
+        MemoryIntrinsics.putShort(address, value);
+    }
 
-        ModelQuadView quad = (ModelQuadView) (Object) bakedQuad;
-
-        int color = ColorABGR.pack(r, g, b, a);
-        BakedModelEncoder.writeQuadVertices(writer, matrices, quad, color, light, overlay, false);
-
-        if (quad.getSprite() != null) {
-            SpriteUtil.INSTANCE.markSpriteActive(quad.getSprite());
-        }
+    @Redirect(method = "*", at = @At(value = "INVOKE", target = "Lorg/lwjgl/system/MemoryUtil;memPutByte(JB)V"))
+    private static void redirectByte(long address, byte value) {
+        MemoryIntrinsics.putByte(address, value);
     }
 
     @Override
-    public void putBulkData(PoseStack.Pose matrices, BakedQuad bakedQuad, float[] brightnessTable, float r, float g, float b, float a, int[] light, int overlay) {
-        if (!this.fastFormat) {
-            VertexConsumer.super.putBulkData(matrices, bakedQuad, brightnessTable, r, g, b, a, light, overlay);
+    public void putBakedQuad(PoseStack.Pose pose, BakedQuad quad, QuadInstance instance) {
+        if (!this.fastFormat) { // check for ENTITY.
+            VertexConsumer.super.putBakedQuad(pose, quad, instance);
 
-            if (bakedQuad.sprite() != null) {
-                SpriteUtil.INSTANCE.markSpriteActive(bakedQuad.sprite());
+            if (quad.materialInfo().sprite() != null) {
+                SpriteUtil.INSTANCE.markSpriteActive(quad.materialInfo().sprite());
             }
 
             return;
@@ -58,12 +61,12 @@ public abstract class BufferBuilderMixin implements VertexConsumer {
 
         VertexBufferWriter writer = VertexBufferWriter.of(this);
 
-        ModelQuadView quad = (ModelQuadView) (Object) bakedQuad;
+        BakedQuadView quadX = (BakedQuadView) (Object) quad;
 
-        BakedModelEncoder.writeQuadVertices(writer, matrices, quad, r, g, b, a, brightnessTable, light, overlay);
+        BakedModelEncoder.writeQuadVertices(writer, pose, quadX, instance);
 
-        if (quad.getSprite() != null) {
-            SpriteUtil.INSTANCE.markSpriteActive(quad.getSprite());
+        if (quad.materialInfo().sprite() != null) {
+            SpriteUtil.INSTANCE.markSpriteActive(quad.materialInfo().sprite());
         }
     }
 }

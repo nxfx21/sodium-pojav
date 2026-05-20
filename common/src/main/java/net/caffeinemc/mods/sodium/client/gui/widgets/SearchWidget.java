@@ -3,11 +3,12 @@ package net.caffeinemc.mods.sodium.client.gui.widgets;
 import net.caffeinemc.mods.sodium.client.config.ConfigManager;
 import net.caffeinemc.mods.sodium.client.config.search.SearchQuerySession;
 import net.caffeinemc.mods.sodium.client.config.structure.Option;
+import net.caffeinemc.mods.sodium.client.gui.ButtonTheme;
 import net.caffeinemc.mods.sodium.client.gui.Colors;
 import net.caffeinemc.mods.sodium.client.gui.Layout;
 import net.caffeinemc.mods.sodium.client.util.Dim2i;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
@@ -21,6 +22,10 @@ import java.util.function.Consumer;
 public class SearchWidget extends AbstractParentWidget {
     // maximum distance from its original position that a search result can be moved to improve grouping
     private static final int MAX_ORDER_DIST_ERROR = 2;
+
+    private static final ButtonTheme CLEAR_BUTTON_THEME = new ButtonTheme(
+            Colors.FOREGROUND, Colors.FOREGROUND, Colors.FOREGROUND_DISABLED,
+            Colors.BACKGROUND_MEDIUM, Colors.BACKGROUND_LIGHT, Colors.BACKGROUND_LIGHT);
 
     private final Consumer<List<Option.OptionNameSource>> onSearchResults;
     private final SearchQuerySession searchQuerySession;
@@ -55,14 +60,15 @@ public class SearchWidget extends AbstractParentWidget {
                 Component.literal("×"),
                 this::clearSearch,
                 true,
-                false
+                false,
+                CLEAR_BUTTON_THEME
         );
 
         this.searchBox = new EditBox(
                 this.font,
                 x + Layout.INNER_MARGIN,
                 y + Layout.BUTTON_SHORT / 2 - this.font.lineHeight / 2,
-                searchBoxWidth - 20,
+                searchBoxWidth - Layout.BUTTON_SHORT,
                 Layout.BUTTON_SHORT,
                 Component.translatable("sodium.options.search")
         );
@@ -76,11 +82,18 @@ public class SearchWidget extends AbstractParentWidget {
 
         this.addChild(this.searchBox);
         this.addChild(this.clearButton);
+
+        this.updateClearButtonVisibility();
+    }
+
+    private void updateClearButtonVisibility() {
+        this.clearButton.setVisible(!this.query.isEmpty());
     }
 
     private void clearSearch() {
         this.searchBox.setValue("");
         this.query = "";
+        this.updateClearButtonVisibility();
         this.search();
         this.setFocused(null);
     }
@@ -91,6 +104,7 @@ public class SearchWidget extends AbstractParentWidget {
         }
 
         this.query = text.stripLeading();
+        this.updateClearButtonVisibility();
         this.search();
     }
 
@@ -153,13 +167,13 @@ public class SearchWidget extends AbstractParentWidget {
     }
 
     @Override
-    public void render(@NonNull GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-        graphics.fill(this.getX(), this.getY(), this.getX() + this.lastRebuildWidth - Layout.BUTTON_SHORT, this.getLimitY(), Colors.BACKGROUND_DEFAULT);
+    public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        graphics.fill(this.getX(), this.getY(), this.getX() + this.lastRebuildWidth, this.getLimitY(), Colors.BACKGROUND_DEFAULT);
 
-        this.searchBox.render(graphics, mouseX, mouseY, delta);
-        this.clearButton.render(graphics, mouseX, mouseY, delta);
+        this.searchBox.extractRenderState(graphics, mouseX, mouseY, delta);
+        this.clearButton.extractRenderState(graphics, mouseX, mouseY, delta);
 
-        super.render(graphics, mouseX, mouseY, delta);
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
     }
 
     @Override

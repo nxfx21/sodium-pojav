@@ -1,20 +1,19 @@
 package net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.bsp_tree;
 
-import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.QuadSplittingMode;
-import org.joml.Vector3fc;
-
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.quad.TQuad;
-import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.data.TopoGraphSorting;
-import net.caffeinemc.mods.sodium.client.util.NativeBuffer;
 import net.caffeinemc.mods.sodium.api.util.NormI8;
+import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.QuadSplittingMode;
+import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.data.TopoGraphSorting;
+import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.quad.TQuad;
+import net.caffeinemc.mods.sodium.client.util.NativeBuffer;
 import net.minecraft.core.SectionPos;
+import org.joml.Vector3fc;
 
 /**
  * A node in the BSP tree. The BSP tree is made up of nodes that split quads
  * into groups on either side of a plane and those that lie on the plane.
  * There's also leaf nodes that contain one or more quads.
- * 
+ * <p>
  * Implementation note:
  * - Doing a convex box test doesn't seem to bring a performance boost, even if
  * it does trigger sometimes with man-made structures. The multi partition node
@@ -33,13 +32,13 @@ public abstract class BSPNode {
     }
 
     public static BSPResult buildBSP(TQuad[] quads, SectionPos sectionPos, BSPNode oldRoot,
-            boolean prepareNodeReuse, QuadSplittingMode quadSplittingMode) {
+            boolean prepareNodeReuse, boolean allowNodeReuse, QuadSplittingMode quadSplittingMode) {
         // throw if there's too many quads
         InnerPartitionBSPNode.validateQuadCount(quads.length);
 
         // create a workspace and then the nodes figure out the recursive building.
         // throws if the BSP can't be built, null if none is necessary
-        var workspace = new BSPWorkspace(quads, sectionPos, prepareNodeReuse, quadSplittingMode);
+        var workspace = new BSPWorkspace(quads, sectionPos, prepareNodeReuse, allowNodeReuse, quadSplittingMode);
 
         // initialize the indexes to all quads
         int[] initialIndexes = new int[quads.length];

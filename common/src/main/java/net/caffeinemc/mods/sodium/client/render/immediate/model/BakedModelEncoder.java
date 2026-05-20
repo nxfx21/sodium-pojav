@@ -1,30 +1,30 @@
 package net.caffeinemc.mods.sodium.client.render.immediate.model;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.caffeinemc.mods.sodium.api.util.ColorMixer;
-import net.caffeinemc.mods.sodium.client.model.quad.ModelQuadView;
+import com.mojang.blaze3d.vertex.QuadInstance;
 import net.caffeinemc.mods.sodium.api.math.MatrixHelper;
-import net.caffeinemc.mods.sodium.api.util.ColorABGR;
-import net.caffeinemc.mods.sodium.api.util.ColorU8;
+import net.caffeinemc.mods.sodium.api.util.ColorARGB;
+import net.caffeinemc.mods.sodium.api.util.ColorMixer;
 import net.caffeinemc.mods.sodium.api.vertex.buffer.VertexBufferWriter;
 import net.caffeinemc.mods.sodium.api.vertex.format.common.EntityVertex;
+import net.caffeinemc.mods.sodium.client.model.quad.BakedQuadView;
 import net.caffeinemc.mods.sodium.client.services.PlatformRuntimeInformation;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 public class BakedModelEncoder {
-    private static int mergeLighting(int stored, int calculated) {
-        if (stored == 0) return calculated;
+    private static final boolean USE_COLOR_MULTIPLICATION = PlatformRuntimeInformation.getInstance().usesBakedQuadColorMultiplication();
 
-        int blockLight = Math.max(stored & 0xFFFF, calculated & 0xFFFF);
-        int skyLight = Math.max((stored >> 16) & 0xFFFF, (calculated >> 16) & 0xFFFF);
-        return blockLight | (skyLight << 16);
-    }
-
-    private static final boolean MULTIPLY_ALPHA = PlatformRuntimeInformation.getInstance().usesAlphaMultiplication();
-
-    public static void writeQuadVertices(VertexBufferWriter writer, PoseStack.Pose matrices, ModelQuadView quad, int color, int light, int overlay, boolean colorize) {
+    /**
+     * Encodes the given quad into the provided writer, applying the transformations and combining the data from {@code quad} and {@code instance}, where {@code instance} is modified dynamically and {@code quad} comes from the baked model.
+     *
+     * @param writer The writer to write the vertex data into.
+     * @param matrices The current transformation matrices to apply to the vertex data.
+     * @param quad The quad to encode, providing the base vertex data.
+     * @param instance The instance providing dynamic data such as color and light, which may also modify the base vertex data from the quad.
+     */
+    public static void writeQuadVertices(VertexBufferWriter writer, PoseStack.Pose matrices, BakedQuadView quad, QuadInstance instance) {
         Matrix3f matNormal = matrices.normal();
         Matrix4f matPosition = matrices.pose();
 
@@ -38,13 +38,16 @@ public class BakedModelEncoder {
                 float y = quad.getY(i);
                 float z = quad.getZ(i);
 
-                int newLight = mergeLighting(quad.getMaxLightQuad(i), light);
+                // take the base quad's material's emission and apply it to the instance's light
+                int newLight = instance.getLightCoordsWithEmission(i, quad.getLightEmission());
 
-                int newColor = color;
-
-                if (colorize) {
-                    newColor = ColorMixer.mulComponentWise(newColor, quad.getColor(i));
+                //  NeoForge patches the default VertexConsumer.putBakedQuad to do ARGB.multiply(instance.getColor(vertex), quad.bakedColors().color(vertex)), but Sodium short-circuits that path via BufferBuilderMixin, so the multiplication is lost. Blocks that encode their tint only in element.color(...) (XyCraft ores) lose all color, and blocks combining a BlockTintSource with a baked color get only one factor applied.
+                //  The platform flag is needed because Fabric's default implementation does not perform this multiplication.
+                int color = instance.getColor(i);
+                if (USE_COLOR_MULTIPLICATION) {
+                    color = ColorMixer.mulComponentWise(color, quad.getColor(i));
                 }
+                int newColor = ColorARGB.toABGR(color);
 
                 // The packed transformed normal vector
                 int normal = MatrixHelper.transformNormal(matNormal, matrices.trustedNormals, quad.getAccurateNormal(i));
@@ -54,60 +57,11 @@ public class BakedModelEncoder {
                 float yt = MatrixHelper.transformPositionY(matPosition, x, y, z);
                 float zt = MatrixHelper.transformPositionZ(matPosition, x, y, z);
 
-                EntityVertex.write(ptr, xt, yt, zt, newColor, quad.getTexU(i), quad.getTexV(i), overlay, newLight, normal);
+                EntityVertex.write(ptr, xt, yt, zt, newColor, quad.getTexU(i), quad.getTexV(i), instance.overlayCoords(), newLight, normal);
                 ptr += EntityVertex.STRIDE;
             }
 
             writer.push(stack, buffer, 4, EntityVertex.FORMAT);
         }
-    }
-
-    public static void writeQuadVertices(VertexBufferWriter writer, PoseStack.Pose matrices, ModelQuadView quad, float r, float g, float b, float a, float[] brightnessTable, int[] light, int overlay) {
-        Matrix3f matNormal = matrices.normal();
-        Matrix4f matPosition = matrices.pose();
-
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            long buffer = stack.nmalloc(4 * EntityVertex.STRIDE);
-            long ptr = buffer;
-
-            for (int i = 0; i < 4; i++) {
-                // The position vector
-                float x = quad.getX(i);
-                float y = quad.getY(i);
-                float z = quad.getZ(i);
-
-                // The transformed position vector
-                float xt = MatrixHelper.transformPositionX(matPosition, x, y, z);
-                float yt = MatrixHelper.transformPositionY(matPosition, x, y, z);
-                float zt = MatrixHelper.transformPositionZ(matPosition, x, y, z);
-
-                float fR;
-                float fG;
-                float fB;
-                float fA;
-
-                var normal = MatrixHelper.transformNormal(matNormal, matrices.trustedNormals, quad.getAccurateNormal(i));
-
-                float brightness = brightnessTable[i];
-
-                fR = brightness * r;
-                fG = brightness * g;
-                fB = brightness * b;
-                fA = a;
-
-                int color = ColorABGR.pack(fR, fG, fB, fA);
-
-                int newLight = mergeLighting(quad.getMaxLightQuad(i), light[i]);
-
-                EntityVertex.write(ptr, xt, yt, zt, color, quad.getTexU(i), quad.getTexV(i), overlay, newLight, normal);
-                ptr += EntityVertex.STRIDE;
-            }
-
-            writer.push(stack, buffer, 4, EntityVertex.FORMAT);
-        }
-    }
-
-    public static boolean shouldMultiplyAlpha() {
-        return MULTIPLY_ALPHA;
     }
 }

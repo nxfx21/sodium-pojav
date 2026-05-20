@@ -2,20 +2,21 @@ package net.caffeinemc.mods.sodium.client.model.light.data;
 
 import net.caffeinemc.mods.sodium.client.services.PlatformBlockAccess;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.world.level.BlockAndLightGetter;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * The light data cache is used to make accessing the light data and occlusion properties of blocks cheaper. The data
  * for each block is stored as an integer with packed fields in order to work around the lack of value types in Java.
- *
+ * <p>
  * This code is not very pretty, but it does perform significantly faster than the vanilla implementation and has
  * good cache locality.
- *
+ * <p>
  * Each integer contains the following fields:
  * - BL: World block light, encoded as a 4-bit unsigned integer
  * - SL: World sky light, encoded as a 4-bit unsigned integer
@@ -25,7 +26,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * - OP: Block opacity test, true if opaque
  * - FO: Full cube opacity test, true if opaque full cube
  * - FC: Full cube test, true if full cube
- *
+ * <p>
  * You can use the various static pack/unpack methods to extract these values in a usable format.
  */
 public abstract class LightDataAccess {
@@ -65,7 +66,7 @@ public abstract class LightDataAccess {
         BlockState state = level.getBlockState(pos);
 
         boolean em = state.emissiveRendering(level, pos);
-        boolean op = state.isViewBlocking(level, pos) && state.getLightBlock() != 0;
+        boolean op = state.isViewBlocking(level, pos) && state.getLightDampening() != 0;
         boolean fo = state.isSolidRender();
         boolean fc = state.isCollisionShapeFullBlock(level, pos);
 
@@ -82,19 +83,13 @@ public abstract class LightDataAccess {
                 bl = level.getBrightness(LightLayer.BLOCK, pos);
                 sl = level.getBrightness(LightLayer.SKY, pos);
             } else {
-                int light = LevelRenderer.getLightColor(LevelRenderer.BrightnessGetter.DEFAULT, level, state, pos);
-                bl = LightTexture.block(light);
-                sl = LightTexture.sky(light);
+                int light = LevelRenderer.getLightCoords(LevelRenderer.BrightnessGetter.DEFAULT, level, state, pos);
+                bl = LightCoordsUtil.block(light);
+                sl = LightCoordsUtil.sky(light);
             }
         }
 
-        // FIX: Do not apply AO from blocks that emit light
-        float ao;
-        if (lu == 0) {
-            ao = state.getShadeBrightness(level, pos);
-        } else {
-            ao = 1.0f;
-        }
+        float ao = state.getShadeBrightness(level, pos);
 
         return packFC(fc) | packFO(fo) | packOP(op) | packEM(em) | packAO(ao) | packLU(lu) | packSL(sl) | packBL(bl);
     }
@@ -169,23 +164,23 @@ public abstract class LightDataAccess {
      * Computes the combined lightmap using block light, sky light, and luminance values.
      *
      * <p>This method's logic is equivalent to
-     * {@link LevelRenderer#getLightColor(BlockAndTintGetter, BlockPos)}, but without the
+     * {@link LevelRenderer#getLightCoords(BlockAndLightGetter, BlockPos)}, but without the
      * emissive check.
      */
     public static int getLightmap(int word) {
-        return LightTexture.pack(Math.max(unpackBL(word), unpackLU(word)), unpackSL(word));
+        return LightCoordsUtil.pack(Math.max(unpackBL(word), unpackLU(word)), unpackSL(word));
     }
 
     /**
      * Like {@link #getLightmap(int)}, but checks {@link #unpackEM(int)} first and returns
-     * the {@link LightTexture#FULL_BRIGHT fullbright lightmap} if emissive.
+     * the {@link LightCoordsUtil#FULL_BRIGHT fullbright lightmap} if emissive.
      *
      * <p>This method's logic is equivalent to
-     * {@link LevelRenderer#getLightColor(BlockAndTintGetter, BlockPos)}.
+     * {@link LevelRenderer#getLightCoords(BlockAndLightGetter, BlockPos)}.
      */
     public static int getEmissiveLightmap(int word) {
         if (unpackEM(word)) {
-            return LightTexture.FULL_BRIGHT;
+            return LightCoordsUtil.FULL_BRIGHT;
         } else {
             return getLightmap(word);
         }

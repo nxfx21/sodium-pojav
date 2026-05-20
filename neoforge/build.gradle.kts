@@ -1,7 +1,7 @@
 plugins {
     id("multiloader-platform")
 
-    id("net.neoforged.moddev") version("2.0.122")
+    id("net.neoforged.moddev") version("2.0.141")
 }
 
 base {
@@ -14,8 +14,8 @@ repositories {
     maven("https://maven.su5ed.dev/releases")
     maven("https://maven.neoforged.net/releases/")
     maven {
-        name = "Maven for PR #2815" // https://github.com/neoforged/NeoForge/pull/2815
-        url = uri("https://prmaven.neoforged.net/NeoForge/pr2815")
+        name = "Maven for PR #pr299pr28793" // https://github.com/neoforged/NeoForge/pull/2815
+        url = uri("https://prmaven.neoforged.net/NeoForge/pr2879")
         content {
             includeModule("net.neoforged", "neoforge")
             includeModule("net.neoforged", "testframework")
@@ -136,13 +136,8 @@ sourceSets {
 
 neoForge {
     version = BuildConfig.NEOFORGE_VERSION
-
-    if (BuildConfig.PARCHMENT_VERSION != null) {
-        parchment {
-            minecraftVersion = BuildConfig.MINECRAFT_VERSION
-            mappingsVersion = BuildConfig.PARCHMENT_VERSION
-        }
-    }
+    accessTransformers.from(file("src/mod/resources/META-INF/accesstransformer.cfg"))
+    validateAccessTransformers = true
 
     runs {
         create("Client") {
@@ -185,9 +180,6 @@ tasks {
     }
 
     getByName<ProcessResources>("processModResources") {
-        eachFile {
-            println(path)
-        }
         filesMatching(listOf("META-INF/neoforge.mods.toml")) {
             expand(mapOf("version" to BuildConfig.createVersionString(rootProject)))
         }

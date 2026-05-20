@@ -2,12 +2,12 @@ package net.caffeinemc.mods.sodium.client.gui.options.control;
 
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import net.caffeinemc.mods.sodium.client.config.structure.BooleanOption;
-import net.caffeinemc.mods.sodium.client.config.structure.Option;
 import net.caffeinemc.mods.sodium.client.config.structure.StatefulOption;
 import net.caffeinemc.mods.sodium.client.gui.ColorTheme;
 import net.caffeinemc.mods.sodium.client.gui.Colors;
+import net.caffeinemc.mods.sodium.client.gui.Layout;
 import net.caffeinemc.mods.sodium.client.util.Dim2i;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -26,7 +26,7 @@ public class TickBoxControl implements Control {
 
     @Override
     public int getMaxWidth() {
-        return 30;
+        return Layout.TICKBOX_CONTROL_WIDTH;
     }
 
     @Override
@@ -34,7 +34,7 @@ public class TickBoxControl implements Control {
         return this.option;
     }
 
-    private static class TickBoxControlElement extends ControlElement {
+    private static class TickBoxControlElement extends StatefulControlElement {
         private final BooleanOption option;
 
         public TickBoxControlElement(AbstractOptionList list, BooleanOption option, Dim2i dim, ColorTheme theme) {
@@ -44,22 +44,22 @@ public class TickBoxControl implements Control {
         }
 
         @Override
-        public Option getOption() {
+        public BooleanOption getOption() {
             return this.option;
         }
 
         @Override
-        public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-            super.render(graphics, mouseX, mouseY, delta);
+        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+            super.extractRenderState(graphics, mouseX, mouseY, delta);
 
-            if (!this.option.showControl()) {
+            if (!this.option.showControl() || this.isResetOverlayActive()) {
                 return;
             }
 
-            final int x = this.getLimitX() - 16;
-            final int y = this.getCenterY() - 5;
-            final int xEnd = x + 10;
-            final int yEnd = y + 10;
+            final int x = this.getLimitX() - Layout.OPTION_TEXT_SIDE_PADDING - Layout.CONTROL_ICON_SIZE;
+            final int y = this.getCenterY() - Layout.CONTROL_ICON_SIZE / 2;
+            final int xEnd = x + Layout.CONTROL_ICON_SIZE;
+            final int yEnd = y + Layout.CONTROL_ICON_SIZE;
 
             final boolean enabled = this.option.isEnabled();
             final boolean ticked = this.option.getValidatedValue();
@@ -100,6 +100,9 @@ public class TickBoxControl implements Control {
 
         @Override
         public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            if (super.mouseClicked(event, doubleClick)) return true;
+            if (this.isResetOverlayActive()) return false;
+
             if (this.option.isEnabled() && event.button() == 0 && this.isMouseOver(event.x(), event.y())) {
                 toggleControl();
                 return true;

@@ -5,7 +5,7 @@ import net.caffeinemc.mods.sodium.client.gui.Colors;
 import net.caffeinemc.mods.sodium.client.gui.Layout;
 import net.caffeinemc.mods.sodium.client.util.Dim2i;
 import net.minecraft.client.gui.ComponentPath;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.navigation.FocusNavigationEvent;
 import net.minecraft.client.input.KeyEvent;
@@ -52,7 +52,7 @@ public class FlatButtonWidget extends AbstractWidget implements Renderable {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         if (!this.visible) {
             return;
         }
@@ -67,8 +67,9 @@ public class FlatButtonWidget extends AbstractWidget implements Renderable {
         }
 
         if (this.label != null) {
-            int strWidth = this.font.width(this.label);
-            this.drawString(graphics, this.label, this.leftAlign ? this.getX() + Layout.TEXT_LEFT_PADDING : (this.getCenterX() - (strWidth / 2)), this.getCenterY() - this.font.lineHeight / 2, textColor);
+            Component rendered = this.getRenderedLabel();
+            int strWidth = this.font.width(rendered);
+            this.drawString(graphics, rendered, this.leftAlign ? this.getX() + Layout.TEXT_LEFT_PADDING : (this.getCenterX() - (strWidth / 2)), this.getCenterY() - this.font.lineHeight / 2, textColor);
         }
 
         if (this.enabled && this.selected) {
@@ -82,6 +83,10 @@ public class FlatButtonWidget extends AbstractWidget implements Renderable {
 
     protected int getTextColor() {
         return this.enabled ? this.theme.themeLighter : this.theme.themeDarker;
+    }
+
+    protected Component getRenderedLabel() {
+        return this.label;
     }
 
     public void setSelected(boolean selected) {
@@ -116,7 +121,7 @@ public class FlatButtonWidget extends AbstractWidget implements Renderable {
         return false;
     }
 
-    private void doAction() {
+    protected void doAction() {
         this.action.run();
         this.playClickSound();
     }
@@ -138,5 +143,9 @@ public class FlatButtonWidget extends AbstractWidget implements Renderable {
 
     public boolean isVisible() {
         return this.visible;
+    }
+
+    public boolean isEnabled() {
+        return this.enabled;
     }
 }

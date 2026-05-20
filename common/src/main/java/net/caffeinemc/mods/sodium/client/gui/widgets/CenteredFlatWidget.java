@@ -6,7 +6,7 @@ import net.caffeinemc.mods.sodium.client.gui.Colors;
 import net.caffeinemc.mods.sodium.client.gui.Layout;
 import net.caffeinemc.mods.sodium.client.util.Dim2i;
 import net.minecraft.client.gui.ComponentPath;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.FocusNavigationEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -37,7 +37,7 @@ public abstract class CenteredFlatWidget extends AbstractWidget {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         if (!this.visible) {
             return;
         }
@@ -45,7 +45,7 @@ public abstract class CenteredFlatWidget extends AbstractWidget {
         this.hovered = this.isMouseOver(mouseX, mouseY);
 
         int backgroundColor = this.hovered ? this.theme.bgHighlight : (this.selected ? this.theme.bgDefault : this.theme.bgInactive);
-        int textColor = this.selected || !this.isSelectable ? this.theme.themeLighter : this.hovered ? this.theme.theme : theme.themeDarker;
+        int textColor = this.selected || !this.isSelectable ? this.theme.themeLighter : (this.hovered ? this.theme.theme : theme.themeDarker);
 
         int x1 = this.getX();
         int y1 = this.getY();
@@ -57,7 +57,7 @@ public abstract class CenteredFlatWidget extends AbstractWidget {
         }
 
         if (this.selected) {
-            this.drawRect(graphics, x2 - 3, y1, x2, y2, this.theme.themeLighter);
+            this.drawRect(graphics, x2 - Layout.PAGE_ENTRY_SELECTION_BAR_WIDTH, y1, x2, y2, this.theme.themeLighter);
         }
 
         // render icon and get offset for text
@@ -80,12 +80,12 @@ public abstract class CenteredFlatWidget extends AbstractWidget {
         return this.getHeight();
     }
 
-    protected int renderIcon(GuiGraphics graphics, int textColor) {
+    protected int renderIcon(GuiGraphicsExtractor graphics, int textColor) {
         return Layout.TEXT_LEFT_PADDING;
     }
 
     private String truncateToFitWidth(Component text, int iconOffset) {
-        return this.truncateTextToFit(text.getString(), this.getWidth() - 14 - iconOffset);
+        return this.truncateTextToFit(text.getString(), this.getWidth() - Layout.PAGE_ENTRY_LABEL_END_PADDING - iconOffset);
     }
 
     public void setSelected(boolean selected) {

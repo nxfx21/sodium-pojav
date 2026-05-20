@@ -15,7 +15,7 @@ import net.caffeinemc.mods.sodium.client.gui.widgets.*;
 import net.caffeinemc.mods.sodium.client.services.PlatformRuntimeInformation;
 import net.caffeinemc.mods.sodium.client.util.Dim2i;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
@@ -47,7 +47,8 @@ public class VideoSettingsScreen extends Screen implements ScreenPromptable, Scr
     private SearchWidget searchWidget;
     private OptionListWidget optionList;
 
-    private FlatButtonWidget applyButton, closeButton, undoButton;
+    private KeyBoundButtonWidget applyButton, closeButton, undoButton;
+    private List<KeyBoundButtonWidget> shortcutButtons = List.of();
     private DonationButtonWidget donateButton;
 
     private boolean hasPendingChanges;
@@ -111,7 +112,7 @@ public class VideoSettingsScreen extends Screen implements ScreenPromptable, Scr
     }
 
     private void openDonationPrompt(SodiumOptions options) {
-        var prompt = new ScreenPrompt(this, DONATION_PROMPT_MESSAGE, 320, 190,
+        var prompt = new ScreenPrompt(this, DONATION_PROMPT_MESSAGE, ScreenPrompt.PROMPT_WIDTH, ScreenPrompt.PROMPT_HEIGHT,
                 new ScreenPrompt.Action(Component.literal("Buy us a coffee"), this::openDonationPage));
         prompt.setFocused(true);
 
@@ -198,18 +199,7 @@ public class VideoSettingsScreen extends Screen implements ScreenPromptable, Scr
             reserveBottomSpace = true;
         }
 
-        this.closeButton = new FlatButtonWidget(new Dim2i(this.getLimitX() - Layout.BUTTON_LONG - ifNotInsetX(Layout.INNER_MARGIN), this.getLimitY() - (ifNotInsetY(Layout.INNER_MARGIN) + Layout.BUTTON_SHORT), Layout.BUTTON_LONG, Layout.BUTTON_SHORT), Component.translatable("gui.done"), this::onClose, true, false);
-        this.addRenderableWidget(this.closeButton);
-
-        if (stackVertically) {
-            this.applyButton = new FlatButtonWidget(new Dim2i(this.closeButton.getX(), this.closeButton.getY() - (Layout.INNER_MARGIN + Layout.BUTTON_SHORT), Layout.BUTTON_LONG, Layout.BUTTON_SHORT), Component.translatable("sodium.options.buttons.apply"), ConfigManager.CONFIG::applyAllOptions, true, false);
-            this.undoButton = new FlatButtonWidget(new Dim2i(this.applyButton.getX(), this.applyButton.getY() - (Layout.INNER_MARGIN + Layout.BUTTON_SHORT), Layout.BUTTON_LONG, Layout.BUTTON_SHORT), Component.translatable("sodium.options.buttons.undo"), this::undoChanges, true, false);
-        } else {
-            this.applyButton = new FlatButtonWidget(new Dim2i(this.closeButton.getX() - Layout.INNER_MARGIN - Layout.BUTTON_LONG, this.getLimitY() - (Layout.INNER_MARGIN + Layout.BUTTON_SHORT), Layout.BUTTON_LONG, Layout.BUTTON_SHORT), Component.translatable("sodium.options.buttons.apply"), ConfigManager.CONFIG::applyAllOptions, true, false);
-            this.undoButton = new FlatButtonWidget(new Dim2i(this.applyButton.getX() - Layout.INNER_MARGIN - Layout.BUTTON_LONG, this.getLimitY() - (Layout.INNER_MARGIN + Layout.BUTTON_SHORT), Layout.BUTTON_LONG, Layout.BUTTON_SHORT), Component.translatable("sodium.options.buttons.undo"), this::undoChanges, true, false);
-        }
-        this.addRenderableWidget(this.undoButton);
-        this.addRenderableWidget(this.applyButton);
+        this.rebuildActionButtons(stackVertically);
 
         this.donateButton = new DonationButtonWidget(this, this::openDonationPage, this::hideDonationButton);
         this.addRenderableWidget(this.searchWidget);
@@ -233,6 +223,27 @@ public class VideoSettingsScreen extends Screen implements ScreenPromptable, Scr
                         this.getLimitY() - tooltipAreaY - ifNotInsetY(Layout.TOOLTIP_OUTER_MARGIN)
                 )
         );
+    }
+
+    private void rebuildActionButtons(boolean stackVertically) {
+        int buttonW = Layout.BUTTON_LONG;
+        int buttonH = Layout.BUTTON_SHORT;
+        int closeX = this.getLimitX() - buttonW - ifNotInsetX(Layout.INNER_MARGIN);
+        int closeY = this.getLimitY() - (ifNotInsetY(Layout.INNER_MARGIN) + buttonH);
+
+        int dx = stackVertically ? 0 : -(Layout.INNER_MARGIN + buttonW);
+        int dy = stackVertically ? -(Layout.INNER_MARGIN + buttonH) : 0;
+        int actionRowX = closeX + dx;
+        int actionRowY = stackVertically ? closeY + dy : this.getLimitY() - (Layout.INNER_MARGIN + buttonH);
+
+        this.closeButton = new KeyBoundButtonWidget(new Dim2i(closeX, closeY, buttonW, buttonH), Component.translatable("gui.done"), this::onClose, true, false, GLFW.GLFW_KEY_D);
+        this.applyButton = new KeyBoundButtonWidget(new Dim2i(actionRowX, actionRowY, buttonW, buttonH), Component.translatable("sodium.options.buttons.apply"), ConfigManager.CONFIG::applyAllOptions, true, false, GLFW.GLFW_KEY_A);
+        this.undoButton = new KeyBoundButtonWidget(new Dim2i(actionRowX + dx, actionRowY + dy, buttonW, buttonH), Component.translatable("sodium.options.buttons.undo"), this::undoChanges, true, false, GLFW.GLFW_KEY_U);
+
+        this.addRenderableWidget(this.closeButton);
+        this.addRenderableWidget(this.undoButton);
+        this.addRenderableWidget(this.applyButton);
+        this.shortcutButtons = List.of(this.closeButton, this.applyButton, this.undoButton);
     }
 
     private void updateScreenDimensions() {
@@ -312,13 +323,13 @@ public class VideoSettingsScreen extends Screen implements ScreenPromptable, Scr
     }
 
     @Override
-    public void render(@NonNull GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         this.updateControls(mouseX, mouseY);
 
-        super.render(graphics, this.prompt != null ? -1 : mouseX, this.prompt != null ? -1 : mouseY, delta);
+        super.extractRenderState(graphics, this.prompt != null ? -1 : mouseX, this.prompt != null ? -1 : mouseY, delta);
 
         if (this.prompt != null) {
-            this.prompt.render(graphics, mouseX, mouseY, delta);
+            this.prompt.extractRenderState(graphics, mouseX, mouseY, delta);
         } else {
             this.tooltip.render(graphics);
         }
@@ -397,6 +408,22 @@ public class VideoSettingsScreen extends Screen implements ScreenPromptable, Scr
                 this.setFocused(this.searchWidget);
                 return true;
             }
+        }
+
+        // dispatch ALT+letter shortcuts to any keybound buttons on this screen
+        for (var button : this.shortcutButtons) {
+            if (button.tryActivateShortcut(event)) {
+                return true;
+            }
+        }
+
+        // ESC closes this screen without saving any pending changes
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+            if (this.hasPendingChanges) {
+                this.undoChanges();
+            }
+
+            this.onClose();
         }
 
         return super.keyReleased(event);
@@ -508,7 +535,7 @@ public class VideoSettingsScreen extends Screen implements ScreenPromptable, Scr
         return this.dim;
     }
 
-    public static int renderIconWithSpacing(GuiGraphics graphics, Identifier icon, int color, boolean iconMonochrome, int x, int y, int height, int margin) {
+    public static int renderIconWithSpacing(GuiGraphicsExtractor graphics, Identifier icon, int color, boolean iconMonochrome, int x, int y, int height, int margin) {
         int iconSize = height - margin * 2;
 
         var texture = Minecraft.getInstance().getTextureManager().getTexture(icon);

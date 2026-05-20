@@ -7,7 +7,7 @@ import net.caffeinemc.mods.sodium.client.gui.widgets.AbstractWidget;
 import net.caffeinemc.mods.sodium.client.gui.widgets.FlatButtonWidget;
 import net.caffeinemc.mods.sodium.client.util.Dim2i;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.input.KeyEvent;
@@ -19,6 +19,12 @@ import org.jspecify.annotations.NonNull;
 import java.util.List;
 
 public class ScreenPrompt implements GuiEventListener, Renderable {
+    public static final int PROMPT_WIDTH = 320;
+    public static final int PROMPT_HEIGHT = 190;
+    private static final int BUTTON_MARGIN = 4;
+    private static final int CLOSE_BUTTON_WIDTH = 80;
+    private static final int ACTION_BUTTON_WIDTH = 110;
+
     private static final ButtonTheme PROMPT_THEME = new ButtonTheme(Colors.FOREGROUND, Colors.FOREGROUND, Colors.FOREGROUND, 0xff393939, 0xff2b2b2b, 0xff2b2b2b);
 
     private final ScreenPromptable parent;
@@ -46,12 +52,16 @@ public class ScreenPrompt implements GuiEventListener, Renderable {
         int boxX = parentDimensions.getCenterX() - (this.width / 2);
         int boxY = parentDimensions.getCenterY() - (this.height / 2);
 
-        this.closeButton = new FlatButtonWidget(new Dim2i((boxX + this.width) - 84, (boxY + this.height) - 24, 80, Layout.BUTTON_SHORT), Component.literal("Close"), this::close, true, false, PROMPT_THEME);
+        int buttonY = (boxY + this.height) - Layout.BUTTON_SHORT - BUTTON_MARGIN;
+        int closeX = (boxX + this.width) - CLOSE_BUTTON_WIDTH - BUTTON_MARGIN;
+        int actionX = closeX - ACTION_BUTTON_WIDTH - BUTTON_MARGIN;
 
-        this.actionButton = new FlatButtonWidget(new Dim2i((boxX + this.width) - 198, (boxY + this.height) - 24, 110, Layout.BUTTON_SHORT), this.action.label, this::runAction, true, false, PROMPT_THEME);
+        this.closeButton = new FlatButtonWidget(new Dim2i(closeX, buttonY, CLOSE_BUTTON_WIDTH, Layout.BUTTON_SHORT), Component.literal("Close"), this::close, true, false, PROMPT_THEME);
+
+        this.actionButton = new FlatButtonWidget(new Dim2i(actionX, buttonY, ACTION_BUTTON_WIDTH, Layout.BUTTON_SHORT), this.action.label, this::runAction, true, false, PROMPT_THEME);
     }
 
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         var parentDimensions = this.parent.getDimensions();
 
         graphics.fill(0, 0, graphics.guiWidth(), graphics.guiHeight(), 0x70090909);
@@ -60,15 +70,13 @@ public class ScreenPrompt implements GuiEventListener, Renderable {
         int boxY = parentDimensions.getCenterY() - (this.height / 2);
 
         graphics.fill(boxX, boxY, boxX + this.width, boxY + this.height, 0xFF171717);
-        graphics.renderOutline(boxX, boxY, this.width, this.height, 0xFF121212);
+        graphics.outline(boxX, boxY, this.width, this.height, 0xFF121212);
 
 
-        int padding = 5;
+        int textX = boxX + Layout.INNER_MARGIN;
+        int textY = boxY + Layout.INNER_MARGIN;
 
-        int textX = boxX + padding;
-        int textY = boxY + padding;
-
-        int textMaxWidth = this.width - (padding * 2);
+        int textMaxWidth = this.width - (Layout.INNER_MARGIN * 2);
 
         var font = Minecraft.getInstance().font;
 
@@ -76,15 +84,15 @@ public class ScreenPrompt implements GuiEventListener, Renderable {
             var formatted = font.split(paragraph, textMaxWidth);
 
             for (var line : formatted) {
-                graphics.drawString(font, line, textX, textY, Colors.FOREGROUND, true);
-                textY += font.lineHeight + 2;
+                graphics.text(font, line, textX, textY, Colors.FOREGROUND, true);
+                textY += font.lineHeight + Layout.TEXT_LINE_SPACING;
             }
 
             textY += Layout.TEXT_PARAGRAPH_SPACING;
         }
 
         for (var button : getWidgets()) {
-            button.render(graphics, mouseX, mouseY, delta);
+            button.extractRenderState(graphics, mouseX, mouseY, delta);
         }
     }
 

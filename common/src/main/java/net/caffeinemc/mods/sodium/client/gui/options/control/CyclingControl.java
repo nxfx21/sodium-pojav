@@ -8,7 +8,7 @@ import net.caffeinemc.mods.sodium.client.gui.Colors;
 import net.caffeinemc.mods.sodium.client.gui.Layout;
 import net.caffeinemc.mods.sodium.client.util.Dim2i;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -38,10 +38,10 @@ public class CyclingControl<T extends Enum<T>> implements Control {
 
     @Override
     public int getMaxWidth() {
-        return 70;
+        return Layout.CYCLING_CONTROL_WIDTH;
     }
 
-    private static class CyclingControlElement<T extends Enum<T>> extends ControlElement {
+    private static class CyclingControlElement<T extends Enum<T>> extends StatefulControlElement {
         private final EnumOption<T> option;
         private final T[] baseValues;
 
@@ -53,15 +53,15 @@ public class CyclingControl<T extends Enum<T>> implements Control {
         }
 
         @Override
-        public Option getOption() {
+        public EnumOption<T> getOption() {
             return this.option;
         }
 
         @Override
-        public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-            super.render(graphics, mouseX, mouseY, delta);
+        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+            super.extractRenderState(graphics, mouseX, mouseY, delta);
 
-            if (!this.option.showControl()) {
+            if (!this.option.showControl() || this.isResetOverlayActive()) {
                 return;
             }
 
@@ -69,7 +69,7 @@ public class CyclingControl<T extends Enum<T>> implements Control {
             Component name = this.option.getElementName(value);
 
             int strWidth = this.getStringWidth(name);
-            this.drawString(graphics, name, this.getLimitX() - strWidth - 6, this.getCenterY() + Layout.REGULAR_TEXT_BASELINE_OFFSET, Colors.FOREGROUND);
+            this.drawString(graphics, name, this.getLimitX() - strWidth - Layout.OPTION_TEXT_SIDE_PADDING, this.getCenterY() + Layout.REGULAR_TEXT_BASELINE_OFFSET, Colors.FOREGROUND);
 
             if (this.isHovered()) {
                 graphics.requestCursor(CursorTypes.POINTING_HAND);
@@ -78,6 +78,9 @@ public class CyclingControl<T extends Enum<T>> implements Control {
 
         @Override
         public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            if (super.mouseClicked(event, doubleClick)) return true;
+            if (this.isResetOverlayActive()) return false;
+
             if (this.option.isEnabled() && event.button() == 0 && this.isMouseOver(event.x(), event.y())) {
                 cycleControl(Minecraft.getInstance().hasShiftDown());
                 return true;

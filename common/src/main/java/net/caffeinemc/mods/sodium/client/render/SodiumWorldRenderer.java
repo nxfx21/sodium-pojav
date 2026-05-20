@@ -1,12 +1,7 @@
 package net.caffeinemc.mods.sodium.client.render;
 
-import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.SheetedDecalTextureGenerator;
-import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.blaze3d.vertex.VertexMultiConsumer;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import net.caffeinemc.mods.sodium.client.SodiumClientMod;
 import net.caffeinemc.mods.sodium.client.gl.device.CommandList;
@@ -21,7 +16,6 @@ import net.caffeinemc.mods.sodium.client.render.chunk.terrain.DefaultTerrainRend
 import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.SortBehavior;
 import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.trigger.CameraMovement;
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
-import net.caffeinemc.mods.sodium.client.services.PlatformBlockAccess;
 import net.caffeinemc.mods.sodium.client.services.PlatformRuntimeInformation;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.caffeinemc.mods.sodium.client.util.NativeBuffer;
@@ -31,17 +25,15 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.*;
-import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayerGroup;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
-import net.minecraft.client.renderer.state.LevelRenderState;
-import net.minecraft.client.resources.model.ModelBakery;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.util.Mth;
 import net.minecraft.util.profiling.Profiler;
@@ -50,9 +42,10 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.jspecify.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
+import org.joml.Vector4f;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -72,7 +65,11 @@ public class SodiumWorldRenderer {
     private Vector3d lastCameraPos;
     private double lastCameraPitch, lastCameraYaw;
     private FogParameters lastFogParameters = FogParameters.NONE;
-    private Matrix4f lastProjectionMatrix;
+
+    /**
+     * This matrix is not the same one used for rendering! It does not correspond to anything specific, other than guaranteeing it'll change with rotation.
+     */
+    private Matrix4f cullMatrix;
 
     private boolean useEntityCulling;
 
@@ -166,6 +163,10 @@ public class SodiumWorldRenderer {
         return this.renderSectionManager.getBuilder().isBuildQueueEmpty();
     }
 
+    public void updateFogColor(Vector4f fogColor) {
+        this.lastFogParameters = new FogParameters(fogColor, this.lastFogParameters);
+    }
+
     /**
      * Called prior to any chunk rendering in order to update necessary state.
      */
@@ -174,7 +175,7 @@ public class SodiumWorldRenderer {
                              FogParameters fogParameters,
                              boolean spectator,
                              boolean updateChunksImmediately,
-                             ChunkRenderMatrices matrices) {
+                             Matrix4f cullMatrix) {
         NativeBuffer.reclaim(false);
 
         this.processChunkEvents();
@@ -202,21 +203,21 @@ public class SodiumWorldRenderer {
         if (this.lastCameraPos == null) {
             this.lastCameraPos = pos;
         }
-        if (this.lastProjectionMatrix == null) {
-            this.lastProjectionMatrix = new Matrix4f(matrices.projection());
+        if (this.cullMatrix == null) {
+            this.cullMatrix = new Matrix4f(cullMatrix);
         }
         boolean cameraLocationChanged = !pos.equals(this.lastCameraPos);
-        boolean fogDistanceChanged = fogParameters.renderEnd() != this.lastFogParameters.renderEnd();
+        boolean fogDistanceChanged = fogParameters.cullDistance() != this.lastFogParameters.cullDistance();
         boolean cameraAngleChanged = pitch != this.lastCameraPitch || yaw != this.lastCameraYaw;
-        boolean cameraProjectionChanged = !matrices.projection().equals(this.lastProjectionMatrix, 0.0001f);
+        boolean cameraProjectionChanged = !cullMatrix.equals(this.cullMatrix, 0.0001f);
 
-        this.lastProjectionMatrix.set(matrices.projection());
+        this.cullMatrix.set(cullMatrix);
 
         this.lastCameraPitch = pitch;
         this.lastCameraYaw = yaw;
 
         if (cameraLocationChanged || fogDistanceChanged || cameraAngleChanged || cameraProjectionChanged) {
-            this.renderSectionManager.markGraphDirty();
+            this.renderSectionManager.notifyChangedCamera();
         }
 
         this.lastFogParameters = fogParameters;
@@ -233,20 +234,20 @@ public class SodiumWorldRenderer {
         int maxChunkUpdates = updateChunksImmediately ? this.renderDistance : 1;
 
         for (int i = 0; i < maxChunkUpdates; i++) {
-            if (this.renderSectionManager.needsUpdate()) {
-                profiler.popPush("chunk_render_lists");
+            this.renderSectionManager.prepareRender();
 
-                this.renderSectionManager.update(camera, viewport, fogParameters, spectator);
-            }
+            profiler.popPush("chunk_render_lists");
+
+            this.renderSectionManager.prepareRenderTrees(camera, viewport, fogParameters, spectator);
 
             profiler.popPush("chunk_update");
 
             this.renderSectionManager.cleanupAndFlip();
-            this.renderSectionManager.updateChunks(updateChunksImmediately);
+            this.renderSectionManager.updateChunks(viewport, updateChunksImmediately);
 
             profiler.popPush("chunk_upload");
 
-            this.renderSectionManager.uploadChunks();
+            this.renderSectionManager.processChunkBuilds(viewport);
 
             if (!this.renderSectionManager.needsUpdate()) {
                 break;
@@ -254,8 +255,8 @@ public class SodiumWorldRenderer {
         }
 
         profiler.popPush("chunk_render_lists");
-        
-        this.renderSectionManager.finalizeRenderLists(viewport);
+
+        this.renderSectionManager.finalizeRenderLists(camera, viewport, fogParameters, updateChunksImmediately);
 
         profiler.popPush("chunk_render_tick");
 
@@ -334,9 +335,8 @@ public class SodiumWorldRenderer {
 
             while (renderSectionIterator.hasNext()) {
                 var renderSectionId = renderSectionIterator.nextByteAsInt();
-                var renderSection = renderRegion.getSection(renderSectionId);
 
-                var blockEntities = renderSection.getCulledBlockEntities();
+                var blockEntities = renderRegion.getCulledBlockEntities(renderSectionId);
 
                 if (blockEntities == null) {
                     continue;
@@ -349,7 +349,7 @@ public class SodiumWorldRenderer {
         }
 
         for (var renderSection : this.renderSectionManager.getSectionsWithGlobalEntities()) {
-            var blockEntities = renderSection.getGlobalBlockEntities();
+            var blockEntities = renderSection.getRegion().getGlobalBlockEntities(renderSection.getSectionIndex());
 
             if (blockEntities == null) {
                 continue;
@@ -396,9 +396,7 @@ public class SodiumWorldRenderer {
 
             while (renderSectionIterator.hasNext()) {
                 var renderSectionId = renderSectionIterator.nextByteAsInt();
-                var renderSection = renderRegion.getSection(renderSectionId);
-
-                var blockEntities = renderSection.getCulledBlockEntities();
+                var blockEntities = renderRegion.getCulledBlockEntities(renderSectionId);
 
                 if (blockEntities == null) {
                     continue;
@@ -411,7 +409,7 @@ public class SodiumWorldRenderer {
         }
 
         for (var renderSection : this.renderSectionManager.getSectionsWithGlobalEntities()) {
-            var blockEntities = renderSection.getGlobalBlockEntities();
+            var blockEntities = renderSection.getRegion().getGlobalBlockEntities(renderSection.getSectionIndex());
 
             if (blockEntities == null) {
                 continue;
@@ -424,10 +422,13 @@ public class SodiumWorldRenderer {
     }
 
     // the volume of a section multiplied by the number of sections to be checked at most
-    private static final double MAX_ENTITY_CHECK_VOLUME = 16 * 16 * 16 * 15;
+    private static final double MAX_ENTITY_CHECK_VOLUME = 16 * 16 * 16 * 50;
 
     /**
      * Returns whether the entity intersects with any visible chunks in the graph.
+     * <p>
+     * Note that this method assumes the entity is within the frustum. It does not perform a frustum check.
+     *
      * @return True if the entity is visible, otherwise false
      */
     public <T extends Entity, S extends EntityRenderState> boolean isEntityVisible(EntityRenderer<T, S> renderer, T entity) {
@@ -440,12 +441,12 @@ public class SodiumWorldRenderer {
             return true;
         }
 
-        AABB bb = ((EntityRendererAccessor) renderer).getCullingBox(entity);
+        AABB bb = ((EntityRendererAccessor) renderer).sodium$getBoundingBoxForCulling(entity);
 
         // bail on very large entities to avoid checking many sections
         double entityVolume = (bb.maxX - bb.minX) * (bb.maxY - bb.minY) * (bb.maxZ - bb.minZ);
         if (entityVolume > MAX_ENTITY_CHECK_VOLUME) {
-            // TODO: do a frustum check instead, even large entities aren't visible if they're outside the frustum
+            // large entities are only frustum tested, their sections are not checked for visibility
             return true;
         }
 
@@ -459,53 +460,33 @@ public class SodiumWorldRenderer {
             return true;
         }
 
-        int minX = SectionPos.posToSectionCoord(x1 - 0.5D);
-        int minY = SectionPos.posToSectionCoord(y1 - 0.5D);
-        int minZ = SectionPos.posToSectionCoord(z1 - 0.5D);
-
-        int maxX = SectionPos.posToSectionCoord(x2 + 0.5D);
-        int maxY = SectionPos.posToSectionCoord(y2 + 0.5D);
-        int maxZ = SectionPos.posToSectionCoord(z2 + 0.5D);
-
-        for (int x = minX; x <= maxX; x++) {
-            for (int z = minZ; z <= maxZ; z++) {
-                for (int y = minY; y <= maxY; y++) {
-                    if (this.renderSectionManager.isSectionVisible(x, y, z)) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
+        return this.renderSectionManager.isBoxVisible(x1, y1, z1, x2, y2, z2);
     }
 
     @Nullable
     public String getChunksDebugString() {
-        // C: visible/total D: distance
-        // TODO: add dirty and queued counts
-        if (renderSectionManager == null) {
+        if (this.renderSectionManager == null) {
             return null;
         }
 
-        return String.format("C: %d/%d D: %d", this.renderSectionManager.getVisibleChunkCount(), this.renderSectionManager.getTotalSections(), this.renderDistance);
+        return this.renderSectionManager.getChunksDebugString();
     }
 
     /**
      * Schedules chunk rebuilds for all chunks in the specified block region.
      */
-    public void scheduleRebuildForBlockArea(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, boolean important) {
-        this.scheduleRebuildForChunks(minX >> 4, minY >> 4, minZ >> 4, maxX >> 4, maxY >> 4, maxZ >> 4, important);
+    public void scheduleRebuildForBlockArea(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, boolean playerChanged) {
+        this.scheduleRebuildForChunks(minX >> 4, minY >> 4, minZ >> 4, maxX >> 4, maxY >> 4, maxZ >> 4, playerChanged);
     }
 
     /**
      * Schedules chunk rebuilds for all chunks in the specified chunk region.
      */
-    public void scheduleRebuildForChunks(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, boolean important) {
+    public void scheduleRebuildForChunks(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, boolean playerChanged) {
         for (int chunkX = minX; chunkX <= maxX; chunkX++) {
             for (int chunkY = minY; chunkY <= maxY; chunkY++) {
                 for (int chunkZ = minZ; chunkZ <= maxZ; chunkZ++) {
-                    this.scheduleRebuildForChunk(chunkX, chunkY, chunkZ, important);
+                    this.scheduleRebuildForChunk(chunkX, chunkY, chunkZ, playerChanged);
                 }
             }
         }
@@ -514,8 +495,8 @@ public class SodiumWorldRenderer {
     /**
      * Schedules a chunk rebuild for the render belonging to the given chunk section position.
      */
-    public void scheduleRebuildForChunk(int x, int y, int z, boolean important) {
-        this.renderSectionManager.scheduleRebuild(x, y, z, important);
+    public void scheduleRebuildForChunk(int x, int y, int z, boolean playerChanged) {
+        this.renderSectionManager.scheduleRebuild(x, y, z, playerChanged);
     }
 
     public Collection<String> getDebugStrings(boolean verbose) {

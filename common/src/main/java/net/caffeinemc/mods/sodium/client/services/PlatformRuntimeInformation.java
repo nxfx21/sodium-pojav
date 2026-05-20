@@ -1,8 +1,9 @@
 package net.caffeinemc.mods.sodium.client.services;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.QuadInstance;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
 
 import java.nio.file.Path;
 
@@ -44,7 +45,7 @@ public interface PlatformRuntimeInformation {
     boolean isModInLoadingList(String modId);
 
     /**
-     * @return Whether {@link VertexConsumer#putBulkData(PoseStack.Pose, BakedQuad, float[], float, float, float, float, int[], int, boolean)} should multiply the vertex alpha component.
+     * @return Whether {@link VertexConsumer#putBakedQuad(PoseStack.Pose, BakedQuad, QuadInstance)} should multiply the vertex color by the baked quad color.
      */
-    boolean usesAlphaMultiplication();
+    boolean usesBakedQuadColorMultiplication();
 }

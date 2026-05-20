@@ -3,12 +3,11 @@ package net.caffeinemc.mods.sodium.client.gui;
 import com.google.gson.FieldNamingPolicy;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import net.caffeinemc.mods.sodium.client.gui.options.TextProvider;
+import com.mojang.blaze3d.textures.FilterMode;
 import net.caffeinemc.mods.sodium.client.render.chunk.DeferMode;
 import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.QuadSplittingMode;
 import net.caffeinemc.mods.sodium.client.services.PlatformRuntimeInformation;
 import net.caffeinemc.mods.sodium.client.util.FileUtil;
-import net.minecraft.network.chat.Component;
 import org.jspecify.annotations.NonNull;
 
 import java.io.FileReader;
@@ -20,10 +19,12 @@ import java.nio.file.Path;
 public class SodiumOptions {
     private static final String DEFAULT_FILE_NAME = "sodium-options.json";
 
-    public final AdvancedSettings advanced = new AdvancedSettings();
+    public final QualitySettings quality = new QualitySettings();
     public final PerformanceSettings performance = new PerformanceSettings();
-    public final NotificationSettings notifications = new NotificationSettings();
+    public final AdvancedSettings advanced = new AdvancedSettings();
+
     public @NonNull DebugSettings debug = new DebugSettings();
+    public final NotificationSettings notifications = new NotificationSettings();
 
     private boolean readOnly;
 
@@ -33,6 +34,13 @@ public class SodiumOptions {
 
     public static SodiumOptions defaults() {
         return new SodiumOptions();
+    }
+
+    public static class QualitySettings {
+        public boolean hiddenFluidCulling = true;
+        public boolean improvedFluidShaping = false;
+        public boolean useClosestPointEntitySort = false;
+        public FilterMode pixelFilteringMode = FilterMode.NEAREST;
     }
 
     public static class PerformanceSettings {
@@ -62,6 +70,7 @@ public class SodiumOptions {
     public static class NotificationSettings {
         public boolean hasClearedDonationButton = false;
         public boolean hasSeenDonationPrompt = false;
+        public boolean hasEditedFullscreenOption = false;
     }
 
     private static final Gson GSON = new GsonBuilder()
@@ -100,7 +109,8 @@ public class SodiumOptions {
 
     public static void writeToDisk(SodiumOptions config) throws IOException {
         if (config.isReadOnly()) {
-            throw new IllegalStateException("Config file is read-only");
+            // throws an IOException so that it is caught correctly when trying to save the config when it's locked
+            throw new IOException("Config file is read-only");
         }
 
         Path path = getConfigPath();

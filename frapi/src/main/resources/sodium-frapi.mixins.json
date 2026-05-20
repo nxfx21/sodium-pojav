@@ -6,22 +6,13 @@
     "defaultRequire": 1
   },
   "overwrites": {
-    "conformVisibility": true
+    "conformVisibility": true,
+    "requireAnnotations": true
   },
   "client": [
-    "BakedModelMixin",
-    "BlockModelPartMixin",
-    "BlockRenderDispatcherAccessor",
-    "BlockRenderDispatcherMixin",
     "ItemFeatureRendererMixin",
-    "ItemLayerRenderStateMixin",
-    "ItemRendererAccessor",
-    "ItemRenderStateMixin",
-    "ModelBlockRendererAccessor",
-    "ModelBlockRendererMixin",
-    "QuadViewImplMixin",
+    "ItemFeatureRendererAccessor",
     "MutableQuadViewImplMixin",
-    "SubmitNodeCollectionMixin",
-    "SubmitNodeStorageMixin"
+    "QuadViewImplMixin"
   ]
 }
