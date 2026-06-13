@@ -75,6 +75,12 @@ public class RenderRegionManager {
             }
 
             if (result instanceof ChunkBuildOutput chunkBuildOutput) {
+                int meshTime = -1;
+
+                if (result.section.consumeFade()) {
+                    meshTime = Math.toIntExact(System.currentTimeMillis() - region.getCreationTime());
+                }
+
                 for (TerrainRenderPass pass : DefaultTerrainRenderPasses.ALL) {
                     var storage = region.getStorage(pass);
 
@@ -84,14 +90,6 @@ public class RenderRegionManager {
                     }
 
                     BuiltSectionMeshParts mesh = chunkBuildOutput.getMesh(pass);
-
-                    // This is before new data is loaded. If this is the first build, isBuilt should be false.
-
-                    int meshTime = -1;
-
-                    if (!result.section.isBuilt()) {
-                        meshTime = Math.toIntExact(System.currentTimeMillis() - region.getCreationTime());
-                    }
 
                     if (mesh != null) {
                         uploads.add(new PendingSectionMeshUpload(result.section, meshTime, mesh, pass,
